@@ -6,12 +6,12 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-#include "PET_FIFO.h"
+
 
 //====Macro Definitions (#define)====
 #define max_description_len 50
 #define max_timestamp_len 27
-#define Error_FIFO_Size 1024
+#define ERROR_FIFO_Size 1024
 
 
 //====Type Definitions (typedef)====
@@ -30,7 +30,7 @@ struct Error_FIFO {   // Structure declaration
   bool Full;
   bool Empty;
   uint32_t Lenght;
-  struct Error_Structure Data[Error_FIFO_Size];
+  struct Error_Structure Data[ERROR_FIFO_Size];
 }; // End the structure with a semicolon
 
 //====Global Variable Declarations (with extern)====

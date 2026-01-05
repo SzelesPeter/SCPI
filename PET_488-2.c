@@ -3,20 +3,19 @@
 
 uint8_t main(void) //ONLY FOR TESTING
 {
+    uint8_t test_sting[] = ":systEM:num .000000000000000001e40  \r\n";
     printf("START\n");
     PET_4882_Init();
     Error_FIFO_Init(&Error_FIFO_1);
-    PET_4882_Recive_character(' ');
-    PET_4882_Recive_character('l');
-    PET_4882_Recive_character('o');
-    PET_4882_Recive_character('L');
-    PET_4882_Recive_character('?');
-    PET_4882_Recive_character('\r');
-    PET_4882_Recive_character('\n');
+
+for(int i = 0; test_sting[i] != '\0'; i++)
+    {
+        PET_4882_Recive_character(test_sting[i]);
+    }
+
     PET_4882_Process();
     return 0;
 }
-
 
 void PET_4882_Init(void)
 {
@@ -36,7 +35,6 @@ void PET_4882_Recive_character(uint8_t character)
         New_line_received++;
     } 
 } 
-
 
 void PET_4882_Send_response(uint8_t* string)
 {
@@ -58,11 +56,10 @@ void PET_4882_Process(void)
         uint8_t* FIFO_ptr = input_buffer.Read_P;
         bool more_message_units = false;
         struct program_mnemonic* current_command_root = &root_mnemonic;
+        function_buffer_index = 0;
 
         do // Process all received message units
         {
-            current_command_root = &root_mnemonic; //reset current cooand pointer to root mnemonic
-
             Step_thru_white_space(&FIFO_ptr);
             
             if((*FIFO_ptr == '\n') || (*FIFO_ptr == '\r'))
@@ -105,6 +102,12 @@ void PET_4882_Process(void)
                 PET_4882_Init();
                 return;
             }
+            if(Decode_program_data(&current_command_root, &FIFO_ptr) != 0)
+            {
+                Error_Event(&Error_FIFO_1, (uint8_t *)"Invalid or insufficient data provided");
+                PET_4882_Init();
+                return;
+            }
             if(Is_white_space(&FIFO_ptr))
             {
                 Step_thru_white_space(&FIFO_ptr);
@@ -112,7 +115,13 @@ void PET_4882_Process(void)
             if(Is_program_message_terminator(&FIFO_ptr))
             {
                 Step_thru_program_message_terminator(&FIFO_ptr);
-                exacute_command_function(current_command_root);
+                if(add_command_function_to_buffer(&current_command_root))
+                {
+                    Error_Event(&Error_FIFO_1, (uint8_t *)"Function buffer overflow");
+                    PET_4882_Init();
+                    return;
+                }
+                exacute_command_function();
                 more_message_units = false;
                 New_line_received--;
                 input_buffer.Read_P = FIFO_ptr + 1;   // Move read pointer past the termination character(s)
@@ -120,7 +129,12 @@ void PET_4882_Process(void)
             else if(Is_program_message_unit_separator(&FIFO_ptr))
             {
                 Step_thru_program_message_unit_separator(&FIFO_ptr);
-                exacute_command_function(current_command_root);
+                if(add_command_function_to_buffer(&current_command_root))
+                {
+                    Error_Event(&Error_FIFO_1, (uint8_t *)"Function buffer overflow");
+                    PET_4882_Init();
+                    return;
+                }
                 more_message_units = true;
             }
             else
@@ -134,18 +148,38 @@ void PET_4882_Process(void)
     }
 }
 
-uint8_t exacute_command_function(struct program_mnemonic* found_command)
+uint8_t add_command_function_to_buffer(struct program_mnemonic** found_command)
 {
-    if(found_command->function(0,0,0,0,0))
+    if(function_buffer_index < 8)
     {
-        Error_Event(&Error_FIFO_1, (uint8_t *)"Cant process command");
+        last_command_root = *found_command;
+        function_buffer[function_buffer_index] = *found_command;
+        function_buffer_index++;
+        return 0;
     }
+    else
+    {
+        return 1; // Function buffer full
+    }
+}
+
+uint8_t exacute_command_function()
+{
+    for(uint8_t i = 0; i < function_buffer_index; i++)
+    {
+        if(function_buffer[i]->function(&data_buffer[i][0],&data_buffer[i][1],&data_buffer[i][2],&data_buffer[i][3],&data_buffer[i][4]))
+        {
+            Error_Event(&Error_FIFO_1, (uint8_t *)"Cant process command");
+        }
+    }
+    function_buffer_index = 0; // Reset function buffer index after command execution
 }
 
 uint8_t Decode_simple_command_program_header(struct program_mnemonic** current_command_root, uint8_t** ptr)
 {
     uint8_t tmp_mnemonic[13] = {0};
     uint8_t index = 0;
+    *current_command_root = &root_mnemonic; //reset current cooand pointer to root mnemonic
 
     while(Is_mnemonic_character(**ptr))
     {
@@ -172,7 +206,8 @@ uint8_t Decode_common_command_program_header(struct program_mnemonic** current_c
 {
     uint8_t tmp_mnemonic[13] = {0};
     uint8_t index = 0;
-
+    *current_command_root = &root_mnemonic; //reset current cooand pointer to root mnemonic
+    
     *ptr = *ptr +1; // Skip the '*'
 
     while(Is_mnemonic_character(**ptr))
@@ -196,6 +231,62 @@ uint8_t Decode_common_command_program_header(struct program_mnemonic** current_c
 
 uint8_t Decode_compound_command_program_header(struct program_mnemonic** current_command_root, uint8_t** ptr)
 {
+    uint8_t tmp_mnemonic[13] = {0};
+    uint8_t index = 0;
+    uint8_t* saved_ptr = *ptr;
+
+    *current_command_root = last_command_root->parent; // Move up one level in the command hierarchy
+
+
+    while(Is_program_mnemonic_separator(ptr)) 
+    {
+        Step_thru_program_mnemonic_separator(ptr); // Skip the ':'
+        
+        while(Is_mnemonic_character(**ptr))
+        {
+            if(index < 12) // Prevent buffer overflow
+            {
+                tmp_mnemonic[index++] = **ptr; // Copy character to temporary mnemonic
+            }
+            *ptr = *ptr +1;
+        }
+        tmp_mnemonic[index] = '\0'; // Null-terminate the string
+
+        // Compare with known common command mnemonics
+        if(Find_maching_mnemonic(compound_command_mnemonics, current_command_root, tmp_mnemonic) != 0)
+        {
+            // No match found, reset pointer and try again
+            *ptr = saved_ptr;
+            index = 0;
+            *current_command_root = &root_mnemonic; //reset current cooand pointer to root mnemonic
+
+            while(Is_program_mnemonic_separator(ptr)) 
+            {
+                Step_thru_program_mnemonic_separator(ptr); // Skip the ':'
+                
+                while(Is_mnemonic_character(**ptr))
+                {
+                    if(index < 12) // Prevent buffer overflow
+                    {
+                        tmp_mnemonic[index++] = **ptr; // Copy character to temporary mnemonic
+                    }
+                    *ptr = *ptr +1;
+                }
+                tmp_mnemonic[index] = '\0'; // Null-terminate the string
+
+                // Compare with known common command mnemonics
+                if(Find_maching_mnemonic(compound_command_mnemonics, current_command_root, tmp_mnemonic) != 0)
+                {
+                    return 1; // No match found
+                }
+
+                index = 0; // Reset index for next mnemonic
+            }
+        }
+
+        index = 0; // Reset index for next mnemonic
+    }
+
     return 0;
 }
 
@@ -212,9 +303,29 @@ uint8_t Find_maching_mnemonic(const struct program_mnemonic** mnemonics_list_ptr
         uint8_t mnemonic_name_upper_case[13];
         strcpy((char*)mnemonic_name_upper_case, (char*)(*mnemonic_ptr)->mnemonic_name);
         Make_string_uppercase(mnemonic_name_upper_case);
+        uint8_t mnemonic_shortname_upper_case[13];
+        strcpy((char*)mnemonic_shortname_upper_case, (char*)(*mnemonic_ptr)->mnemonic_name);
+        for(uint8_t i = 12; i > 0; i--)
+        {
+            if(mnemonic_shortname_upper_case[i] >= 'a' && mnemonic_shortname_upper_case[i] <= 'z')
+            {
+                mnemonic_shortname_upper_case[i] = 0;
+            }
+            else if(mnemonic_shortname_upper_case[i] == '?' && (mnemonic_shortname_upper_case[i-1] >= 'a' && mnemonic_shortname_upper_case[i-1] <= 'z'))
+            {
+                mnemonic_shortname_upper_case[i] = 0;
+                mnemonic_shortname_upper_case[i-1] = '?';
+            }
+        }
+                
         if((*mnemonic_ptr)->parent == *current_command_root)
         {
             if(strcmp((char*)mnemonic_name_upper_case, (char*)input_mnemonic_upper_case) == 0)
+            {
+                *current_command_root = *mnemonic_ptr;
+                return 0; // Match found
+            }
+            else if(strcmp((char*)mnemonic_shortname_upper_case, (char*)input_mnemonic_upper_case) == 0)
             {
                 *current_command_root = *mnemonic_ptr;
                 return 0; // Match found
@@ -224,6 +335,226 @@ uint8_t Find_maching_mnemonic(const struct program_mnemonic** mnemonics_list_ptr
     }
     return 1; // No match found
 }
+
+uint8_t Decode_program_data(struct program_mnemonic** current_command_root, uint8_t** ptr)
+{
+    Step_thru_program_header_separator(ptr);
+
+    for(uint8_t i = 0; i < 5; i++)
+    {
+        if (0 ==i)
+        {
+            if (Is_program_header_separator(ptr))
+            {
+                Step_thru_program_header_separator(ptr);
+            }
+        }
+        else
+        {
+            if((*current_command_root)->data_types[i] != NON)
+            {
+                Step_thru_white_space(ptr);
+                if (Is_program_data_separator(ptr))
+                {
+                    Step_thru_program_data_separator(ptr);
+                }
+                else
+                {
+                    return 1; // Not enough data provided
+                }
+                Step_thru_white_space(ptr);
+            }
+        }
+            
+        switch ((*current_command_root)->data_types[i])
+        {
+        case NON:
+            break;
+        case CHARACTER_PROGRAM_DATA:
+            uint8_t tmp_character_program_data[13] = {0};
+            if (Decode_character_program_data(ptr, tmp_character_program_data) != 0)
+            {
+                return 1; // Error decoding character data
+            }
+            strcpy(data_buffer[function_buffer_index][i].string, (char*)tmp_character_program_data);
+            break;
+        case DECIMAL_NUMERIC_PROGRAM_DATA:
+            float tmp_decimal_numeric_program_data = 0;
+            if (Decode_decimal_numeric_program_data(ptr, (float*)&tmp_decimal_numeric_program_data) != 0)
+            {
+                return 1; // Error decoding decimal numeric data
+            }
+            data_buffer[function_buffer_index][i].f = tmp_decimal_numeric_program_data;
+            break;
+        case SUFFIX_PROGRAM_DATA:
+            return 1; // Unsupported data type
+            break;
+        case NONDECIMAL_NUMERIC_PROGRAM_DATA:
+            return 1; // Unsupported data type
+            break;
+        case STRING_PROGRAM_DATA:
+            return 1; // Unsupported data type
+            break;
+        case ARBITRARY_BLOCK_PROGRAM_DATA:
+            return 1; // Unsupported data type
+            break;
+        case EXPRESSION_PROGRAM_DATA:
+            return 1; // Unsupported data type
+            break;
+
+        default:
+            return 1; // Unsupported data type
+            break;
+        }
+    }
+    return 0;
+}
+
+uint8_t Decode_character_program_data(uint8_t** ptr, uint8_t* output_string)
+{
+    uint8_t index = 0;
+    while(Is_mnemonic_character(**ptr))
+    {
+        if(index < 12) // Prevent buffer overflow
+        {
+            output_string[index++] = **ptr; // Copy character to temporary mnemonic
+        }
+        *ptr = *ptr +1;
+    }
+    if (index == 0)
+    {
+        return 1; // No character data found
+    }
+    output_string[index] = '\0'; // Null-terminate the string
+    return 0;
+}
+
+uint8_t Decode_decimal_numeric_program_data(uint8_t** ptr, float* output_value)
+{
+    float mantissa = 0;
+    int32_t exponent = 0;
+    uint32_t mantissa_integer = 0;
+    float mantissa_fraction = 0;
+    bool is_negative = false;
+    bool integer_part_exists = false;
+    bool fraction_part_exists = false;
+
+    
+    if(**ptr == '-')
+    {
+        is_negative = true;
+        (*ptr)++; // Move past the negative sign
+    }
+    else if(**ptr == '+')
+    {
+        (*ptr)++; // Move past the positive sign
+    }
+    else if(Is_digit(**ptr)) // Read integer part
+    {
+        integer_part_exists = true;
+        while (Is_digit(**ptr))
+        {
+            mantissa_integer = mantissa_integer *10 + (**ptr - '0');
+            (*ptr)++;
+        }
+    }
+
+    if(**ptr == '.') // Read fractional part
+    {
+        (*ptr)++; // Skip the decimal point
+        if(Is_digit(**ptr)) // Read fractional digits
+        {
+            fraction_part_exists = true;
+            uint8_t fraction_digit_count = 0;
+            while (Is_digit(**ptr))
+            {
+                mantissa_fraction = mantissa_fraction + ( (**ptr - '0') / pow(10, fraction_digit_count + 1) );
+                fraction_digit_count++;
+                (*ptr)++;
+            }
+        }
+    }
+
+    if(!integer_part_exists && !fraction_part_exists)
+    {
+        return 1; // No numeric data found
+    }
+
+    // Combine integer and fractional parts and apply sign
+    mantissa = (float)mantissa_integer+(float)mantissa_fraction;
+    if(is_negative)
+    {
+        mantissa = -mantissa;
+    }
+
+    Step_thru_white_space(ptr);
+
+    if((**ptr == 'E') || (**ptr == 'e')) // Read exponent part
+    {
+        (*ptr)++; // Skip the 'E' or 'e'
+        Step_thru_white_space(ptr);
+
+        bool exponent_negative = false;
+        if(**ptr == '-')
+        {
+            exponent_negative = true;
+            (*ptr)++; // Move past the negative sign
+        }
+        else if(**ptr == '+')
+        {
+            (*ptr)++; // Move past the positive sign
+        }
+        if(Is_digit(**ptr)) // Read exponent digits
+        {
+            while (Is_digit(**ptr))
+            {
+                exponent = exponent *10 + (**ptr - '0');
+                (*ptr)++;
+            }
+            if(exponent_negative) // Apply exponent sign to exponent value
+            {
+                exponent = -((int32_t)exponent);
+            }
+        }
+        else
+        {
+            return 1; // Invalid exponent format
+        }
+    }
+    *output_value = mantissa * pow(10, exponent); // Apply exponent to mantissa
+    return 0;
+}
+
+uint8_t Decode_suffix_program_data(uint8_t** ptr, float* output_value)
+{
+    // Implementation for decoding suffix data goes here
+    return 0;
+}
+
+uint8_t Decode_nondecmial_numeric_program_data(uint8_t** ptr, int32_t* output_value)
+{
+    // Implementation for decoding non-decimal numeric data goes here
+    return 0;
+}
+
+uint8_t Decode_string_program_data(uint8_t** ptr, uint8_t* output_string)
+{
+    // Implementation for decoding string data goes here
+    return 0;
+}
+
+uint8_t Decode_arbitrary_block_program_data(uint8_t** ptr, uint8_t* output_data, uint32_t* output_length)
+{
+    // Implementation for decoding arbitrary block data goes here
+    return 0;
+}
+
+uint8_t Decode_expression_program_data(uint8_t** ptr, float* output_value)
+{
+    // Implementation for decoding expression data goes here
+    return 0;
+}
+
 
 // Utility Functions
 
@@ -248,6 +579,15 @@ bool Is_mnemonic_character(uint8_t ptr)
     return false;
 }
 
+bool Is_digit(uint8_t ptr)
+{
+    if((ptr >= '0') && (ptr <= '9'))
+    {
+        return true;
+    }
+    return false;
+}
+
 void Step_thru_white_space(uint8_t** ptr)
 {
     while(((**ptr >= 0x0) && (**ptr <= 0x09)) || ((**ptr >= 0x0B) && (**ptr <= 0x20)))
@@ -265,6 +605,21 @@ bool Is_white_space(uint8_t** ptr)
     return false;
 }
 
+
+bool Is_program_mnemonic_separator(uint8_t** ptr)
+{
+    if(**ptr == ':')
+    {
+        return true;
+    }
+    return false;
+}
+
+void Step_thru_program_mnemonic_separator(uint8_t** ptr)
+{
+    (*ptr)++; // Move past the semicolon
+}
+
 void Step_thru_program_message_terminator(uint8_t** ptr)
 {
     while((**ptr == '\n') || (**ptr == '\r'))
@@ -272,6 +627,7 @@ void Step_thru_program_message_terminator(uint8_t** ptr)
         (*ptr)++;
     }
 }
+
 
 bool Is_program_message_terminator(uint8_t** ptr)
 {
@@ -285,6 +641,11 @@ bool Is_program_message_terminator(uint8_t** ptr)
 bool Is_program_header_separator(uint8_t** ptr)
 {
     return Is_white_space(ptr);
+}
+
+void Step_thru_program_header_separator(uint8_t** ptr)
+{
+    Step_thru_white_space(ptr);
 }
 
 bool Is_program_data_separator(uint8_t** ptr)
@@ -323,7 +684,7 @@ void Input_FIFO_Init( struct Input_FIFO *FIFO)
 	FIFO->Read_P = FIFO->Data;
 	FIFO->Empty = true;
 	FIFO->Full = false;
-	FIFO->Lenght = FIFO_Size;
+	FIFO->Lenght = Input_buffer_Size;
 }
 
 uint8_t Input_FIFO_Write( struct Input_FIFO *FIFO, uint8_t *Data )
@@ -378,7 +739,7 @@ void Output_FIFO_Init( struct Output_FIFO *FIFO)
 	FIFO->Read_P = FIFO->Data;
 	FIFO->Empty = true;
 	FIFO->Full = false;
-	FIFO->Lenght = FIFO_Size;
+	FIFO->Lenght = Output_buffer_Size;
 }
 
 uint8_t Output_FIFO_Write( struct Output_FIFO *FIFO, uint8_t *Data )

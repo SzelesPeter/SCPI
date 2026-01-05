@@ -10,13 +10,17 @@
 #include "PET_ERROR.h"
 #include "PET_488-2.h"
 
-#include "Tmp.h" // For testing purposes only !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
 //====Macro Definitions (#define)====
 
 
 //====Type Definitions (typedef)====
-typedef uint8_t (*function_ptr_4882)(void *var_1, void *var_2, void *var_3, void *var_4, void *var_5);
+union data_union { // needs to be above function_ptr_4882 typedef
+    uint32_t i;
+    float f;
+    char string[256];
+};
+
+typedef uint8_t (*function_ptr_4882)(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
 
 typedef enum {
     NON,
@@ -31,6 +35,8 @@ typedef enum {
 
 
 //====Struct, Union, and Enum Declarations====
+
+
 struct program_mnemonic {   // Structure declaration
   uint8_t mnemonic_name[13];
   struct program_mnemonic* parent;
@@ -42,21 +48,21 @@ struct program_mnemonic {   // Structure declaration
 
 //====Function Declarations (Prototypes)====
 // Common Commands
-uint8_t PET_4882_IDN_query(void *var_1, void *var_2, void *var_3, void *var_4, void *var_5);
-uint8_t PET_4882_RST_command(void *var_1, void *var_2, void *var_3, void *var_4, void *var_5);
-uint8_t PET_4882_TST_query(void *var_1, void *var_2, void *var_3, void *var_4, void *var_5);
+uint8_t PET_4882_IDN_query(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
+uint8_t PET_4882_RST_command(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
+uint8_t PET_4882_TST_query(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
 
 //Simple Commands
-uint8_t PET_4882_LOL_query(void *var_1, void *var_2, void *var_3, void *var_4, void *var_5);
+uint8_t PET_4882_LOL_query(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
 
 //Compound Commands
-uint8_t PET_4882_SYSTem_ERRor_query(void *var_1, void *var_2, void *var_3, void *var_4, void *var_5);
-uint8_t PET_4882_SYSTem_VERsion_query(void *var_1, void *var_2, void *var_3, void *var_4, void *var_5);
-
-
+uint8_t PET_4882_SYSTem_ERRor_query(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
+uint8_t PET_4882_SYSTem_VERsion_query(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
+uint8_t PET_4882_SYSTem_MESsage(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
+uint8_t PET_4882_SYSTem_NUMber(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
 
 //====Global Variable Declarations (with extern)====
-struct program_mnemonic* last_command_root;
+
 
 
 const struct program_mnemonic root_mnemonic = {
@@ -140,10 +146,28 @@ const struct program_mnemonic SYSTem_VERsion_query_mnemonic = {
     .is_end_mnemonic = true
 };
 
+const struct program_mnemonic SYSTem_MESsage_mnemonic = {
+    .mnemonic_name = "MESsage",
+    .parent = &SYSTem_mnemonic,
+    .data_types = {CHARACTER_PROGRAM_DATA, NON},
+    .function = &PET_4882_SYSTem_MESsage,
+    .is_end_mnemonic = true
+};
+
+const struct program_mnemonic SYSTem_NUMber_mnemonic = {
+    .mnemonic_name = "NUMber",
+    .parent = &SYSTem_mnemonic,
+    .data_types = {DECIMAL_NUMERIC_PROGRAM_DATA, NON},
+    .function = &PET_4882_SYSTem_NUMber,
+    .is_end_mnemonic = true
+};
+
 const struct program_mnemonic *compound_command_mnemonics[] = {
     &SYSTem_mnemonic,
     &SYSTem_ERRor_query_mnemonic,
     &SYSTem_VERsion_query_mnemonic,
+    &SYSTem_MESsage_mnemonic,
+    &SYSTem_NUMber_mnemonic,
     0
 };
 

@@ -46,7 +46,7 @@ void Error_FIFO_Init(struct Error_FIFO *FIFO)
 	FIFO->Read_P = FIFO->Data;
 	FIFO->Empty = true;
 	FIFO->Full = false;
-	FIFO->Lenght = FIFO_Size;
+	FIFO->Lenght = ERROR_FIFO_Size;
 }
 
 uint8_t Error_FIFO_Write( struct Error_FIFO *FIFO, struct Error_Structure* struct_pointer )
