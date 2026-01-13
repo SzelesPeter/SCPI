@@ -55,6 +55,7 @@ struct Output_FIFO {   // Structure declaration
     struct Input_FIFO input_buffer;
     struct Output_FIFO output_buffer;
     uint8_t New_line_received = 0;
+    uint8_t New_line_received_during_string = 0;
     struct program_mnemonic* last_command_root;
     struct program_mnemonic* function_buffer[8];
     uint8_t function_buffer_index = 0;
@@ -101,6 +102,7 @@ void Step_thru_program_message_unit_separator(uint8_t** ptr);
 void Input_FIFO_Init( struct Input_FIFO *FIFO);
 uint8_t Input_FIFO_Write( struct Input_FIFO *FIFO, uint8_t *Data );
 uint8_t Input_FIFO_Read( struct Input_FIFO *FIFO, uint8_t *Data );
+uint8_t Input_FIFO_Move_pointer( struct Input_FIFO *FIFO, uint8_t **ptr );
 void Output_FIFO_Init( struct Output_FIFO *FIFO);
 uint8_t Output_FIFO_Write( struct Output_FIFO *FIFO, uint8_t *Data );
 uint8_t Output_FIFO_Read( struct Output_FIFO *FIFO, uint8_t *Data );

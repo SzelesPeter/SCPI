@@ -1,9 +1,18 @@
 #include "PET_488-2.h"
 
 
+//TODO:
+//  \r not handled correctly as message terminator
+//when incrementing (*ptr)++ check for buffer overflow
+// Implement Input_FIFO_Move_pointer function to move pointer within FIFO buffer safely
+// Handle New_line_received_during_string properly
+//                  -Save the adress of the New_line_received.   
+//                  -Only decode untill that adress
+
+
 uint8_t main(void) //ONLY FOR TESTING
 {
-    uint8_t test_sting[] = ":systEM:num .000000000000000001e40  \r\n";
+    uint8_t test_sting[] = ":systEM:message \"\n\rTest string\n\r with 'new line' and carrage return \"\"and quotes\"\"\";:message \"\n\rTest string\n\r with 'new line' and carrage return \"\"and quotes\"\"\" \n";
     printf("START\n");
     PET_4882_Init();
     Error_FIFO_Init(&Error_FIFO_1);
@@ -11,9 +20,10 @@ uint8_t main(void) //ONLY FOR TESTING
 for(int i = 0; test_sting[i] != '\0'; i++)
     {
         PET_4882_Recive_character(test_sting[i]);
+        PET_4882_Process();
     }
 
-    PET_4882_Process();
+    
     return 0;
 }
 
@@ -102,8 +112,13 @@ void PET_4882_Process(void)
                 PET_4882_Init();
                 return;
             }
-            if(Decode_program_data(&current_command_root, &FIFO_ptr) != 0)
+            uint8_t tmp_error = Decode_program_data(&current_command_root, &FIFO_ptr);
+            if(tmp_error != 0)
             {
+                if(tmp_error == 2)
+                {
+                    return; // Wait for more data
+                }
                 Error_Event(&Error_FIFO_1, (uint8_t *)"Invalid or insufficient data provided");
                 PET_4882_Init();
                 return;
@@ -173,6 +188,7 @@ uint8_t exacute_command_function()
         }
     }
     function_buffer_index = 0; // Reset function buffer index after command execution
+    return 0;
 }
 
 uint8_t Decode_simple_command_program_header(struct program_mnemonic** current_command_root, uint8_t** ptr)
@@ -393,7 +409,18 @@ uint8_t Decode_program_data(struct program_mnemonic** current_command_root, uint
             return 1; // Unsupported data type
             break;
         case STRING_PROGRAM_DATA:
-            return 1; // Unsupported data type
+            uint8_t tmp_string_program_data[256] = {0};
+            uint8_t tmp_error = 1;
+            tmp_error = Decode_string_program_data(ptr, tmp_string_program_data);
+            if (tmp_error == 2)
+            {
+                return 2; // String not completed before buffer end
+            }
+            else if (tmp_error != 0)
+            {
+                return 1; // Error decoding string data
+            }
+            strcpy(data_buffer[function_buffer_index][i].string, (char*)tmp_string_program_data);
             break;
         case ARBITRARY_BLOCK_PROGRAM_DATA:
             return 1; // Unsupported data type
@@ -539,7 +566,99 @@ uint8_t Decode_nondecmial_numeric_program_data(uint8_t** ptr, int32_t* output_va
 
 uint8_t Decode_string_program_data(uint8_t** ptr, uint8_t* output_string)
 {
-    // Implementation for decoding string data goes here
+    uint8_t New_line_received_during_string = 0;
+    if(**ptr == '\"') // Check for opening double quote
+    {
+        (*ptr)++; // Move past the opening double quote
+        uint8_t index = 0;
+        while(1)
+        {
+            if(**ptr == '\"') // Check for closing double quote
+            {
+                (*ptr)++; // Move past the closing double quote
+                if(**ptr == '\"') // Check for inserted double quote
+                {
+                    if(index < 255) // Prevent buffer overflow
+                    {
+                        output_string[index++] = '\"'; // Add a single double quote to the output
+                    }
+                    (*ptr)++; // Move past the inserted double quote
+                }
+                else
+                {
+                    output_string[index] = '\0'; // Null-terminate the string
+                    return 0; // Successfully decoded string
+                }
+            }
+            else
+            {
+                if(index < 255) // Prevent buffer overflow
+                {
+                    output_string[index++] = **ptr; // Copy character to output string
+                    if(**ptr == '\n' || **ptr == '\r')
+                    {
+                        New_line_received_during_string++;
+                    }
+                }
+                else
+                {
+                    return 1; // Output string buffer overflow
+                }
+                if (Input_FIFO_Move_pointer( &input_buffer, ptr ) != 0) // Move to the next character
+                {
+                    printf("Buffer end reached while decoding string\n");
+                    New_line_received--;
+                    return 2; // String not completed before buffer end
+                }
+            }
+        }
+    }
+    else if(**ptr == '\'')
+    {
+        (*ptr)++; // Move past the opening single quote
+        uint8_t index = 0;
+        while(1)
+        {
+            if(**ptr == '\'') // Check for closing single quote
+            {
+                (*ptr)++; // Move past the closing single quote
+                if(**ptr == '\'') // Check for inserted single quote
+                {
+                    if(index < 255) // Prevent buffer overflow
+                    {
+                        output_string[index++] = '\''; // Add a single single quote to the output
+                    }
+                    (*ptr)++; // Move past the inserted single quote
+                }
+                else
+                {
+                    output_string[index] = '\0'; // Null-terminate the string
+                    return 0; // Successfully decoded string
+                }
+            }
+            else
+            {
+                if(index < 255) // Prevent buffer overflow
+                {
+                    output_string[index++] = **ptr; // Copy character to output string
+                }
+                else
+                {
+                    return 1; // Output string buffer overflow
+                }
+                if (Input_FIFO_Move_pointer( &input_buffer, ptr ) != 0) // Move to the next character
+                {
+                    printf("Buffer end reached while decoding string\n");
+                    return 2; // String not completed before buffer end
+                }
+            }
+        }
+    }
+    else
+    {
+        return 1; // Invalid string format
+    }
+
     return 0;
 }
 
@@ -727,6 +846,23 @@ uint8_t Input_FIFO_Read( struct Input_FIFO *FIFO, uint8_t *Data )
 		if(FIFO->Write_P == FIFO->Read_P)
 		{
 			FIFO->Empty = true;
+		}
+		return 0;
+	}
+	return 1;
+}
+
+uint8_t Input_FIFO_Move_pointer( struct Input_FIFO *FIFO, uint8_t **ptr )
+{
+	if(*ptr != FIFO->Write_P)
+	{
+		if(*ptr<(FIFO->Data+FIFO->Lenght-1))
+		{
+			(*ptr)++;
+		}
+		else
+		{
+			*ptr = FIFO->Data;
 		}
 		return 0;
 	}
