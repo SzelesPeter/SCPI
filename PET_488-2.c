@@ -32,7 +32,6 @@ void PET_4882_Init(void)
     Program_Message_Terminator_FIFO_Init(&program_message_terminator_buffer);
     Input_FIFO_Init(&input_buffer);
     Output_FIFO_Init(&output_buffer);
-    New_line_received = 0;
     last_command_root = &root_mnemonic;
 }
 
@@ -44,7 +43,6 @@ void PET_4882_Recive_character(uint8_t character)
     if((character == '\n') || (character == '\r'))
     {
         Program_Message_Terminator_FIFO_Write(&program_message_terminator_buffer, &input_buffer.Write_P);
-        New_line_received++;  //TODO: remove
     } 
 }
 
@@ -82,7 +80,6 @@ void PET_4882_Process(void)
             if((*FIFO_ptr == '\n') || (*FIFO_ptr == '\r'))
             {
                 Error_Event(&Error_FIFO_1, (uint8_t *)"Empty command received");
-                New_line_received--;
                 input_buffer.Read_P = FIFO_ptr + 1;   // Move read pointer past the termination character(s)
                 return;
             }
@@ -145,7 +142,6 @@ void PET_4882_Process(void)
                 }
                 exacute_command_function();
                 more_message_units = false;
-                New_line_received--;
                 input_buffer.Read_P = FIFO_ptr;   // Move read pointer past the termination character(s)
             }
             else if(Is_program_message_unit_separator(&FIFO_ptr))
@@ -629,7 +625,6 @@ uint8_t Decode_string_program_data(uint8_t** ptr, uint8_t* output_string)
                 if (Input_FIFO_Move_pointer( &input_buffer, ptr ) != 0) // Move to the next character
                 {
                     printf("Buffer end reached while decoding string\n");
-                    New_line_received--;
                     return 2; // String not completed before buffer end
                 }
             }

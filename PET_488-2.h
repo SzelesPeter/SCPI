@@ -64,8 +64,6 @@ struct Output_FIFO {   // Structure declaration
     struct program_message_terminator_FIFO program_message_terminator_buffer;
     struct Input_FIFO input_buffer;
     struct Output_FIFO output_buffer;
-    uint8_t New_line_received = 0;
-    uint8_t New_line_received_during_string = 0;
     struct program_mnemonic* last_command_root;
     struct program_mnemonic* function_buffer[8];
     uint8_t function_buffer_index = 0;
