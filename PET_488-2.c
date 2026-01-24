@@ -12,7 +12,7 @@
 
 uint8_t main(void) //ONLY FOR TESTING
 {
-    uint8_t test_sting[] = ":systEM:message \"\n\rTest string\n\r with 'new line' and carrage return \"\"and quotes\"\"\";:message \"\n\rTest string\n\r with 'new line' and carrage return \"\"and quotes\"\"\" \n";
+    uint8_t test_sting[] = ":systEM:message #01234abcd1234abcd\n\r;:systEM:message #2161234abcd1234abcd\n";
     printf("START\n");
     PET_4882_Init();
     Error_FIFO_Init(&Error_FIFO_1);
@@ -29,6 +29,7 @@ for(int i = 0; test_sting[i] != '\0'; i++)
 
 void PET_4882_Init(void)
 {
+    Program_Message_Terminator_FIFO_Init(&program_message_terminator_buffer);
     Input_FIFO_Init(&input_buffer);
     Output_FIFO_Init(&output_buffer);
     New_line_received = 0;
@@ -42,9 +43,10 @@ void PET_4882_Recive_character(uint8_t character)
     }
     if((character == '\n') || (character == '\r'))
     {
-        New_line_received++;
+        Program_Message_Terminator_FIFO_Write(&program_message_terminator_buffer, &input_buffer.Write_P);
+        New_line_received++;  //TODO: remove
     } 
-} 
+}
 
 void PET_4882_Send_response(uint8_t* string)
 {
@@ -61,12 +63,17 @@ void PET_4882_Send_response(uint8_t* string)
 
 void PET_4882_Process(void)
 {
-    if(New_line_received)
+    if(0 == program_message_terminator_buffer.Empty)
     {
         uint8_t* FIFO_ptr = input_buffer.Read_P;
         bool more_message_units = false;
         struct program_mnemonic* current_command_root = &root_mnemonic;
         function_buffer_index = 0;
+        if (Program_Message_Terminator_FIFO_Read(&program_message_terminator_buffer, &read_input_buffer_until) != 0)
+        {
+            Error_Event(&Error_FIFO_1, (uint8_t *)"Program message terminator buffer underflow");
+            return;
+        }
 
         do // Process all received message units
         {
@@ -139,7 +146,7 @@ void PET_4882_Process(void)
                 exacute_command_function();
                 more_message_units = false;
                 New_line_received--;
-                input_buffer.Read_P = FIFO_ptr + 1;   // Move read pointer past the termination character(s)
+                input_buffer.Read_P = FIFO_ptr;   // Move read pointer past the termination character(s)
             }
             else if(Is_program_message_unit_separator(&FIFO_ptr))
             {
@@ -409,21 +416,36 @@ uint8_t Decode_program_data(struct program_mnemonic** current_command_root, uint
             return 1; // Unsupported data type
             break;
         case STRING_PROGRAM_DATA:
-            uint8_t tmp_string_program_data[256] = {0};
-            uint8_t tmp_error = 1;
-            tmp_error = Decode_string_program_data(ptr, tmp_string_program_data);
-            if (tmp_error == 2)
             {
-                return 2; // String not completed before buffer end
+                uint8_t tmp_string_program_data[256] = {0};
+                uint8_t tmp_error = 1;
+                tmp_error = Decode_string_program_data(ptr, tmp_string_program_data);
+                if (tmp_error == 2)
+                {
+                    return 2; // String not completed before buffer end
+                }
+                else if (tmp_error != 0)
+                {
+                    return 1; // Error decoding string data
+                }
+                strcpy(data_buffer[function_buffer_index][i].string, (char*)tmp_string_program_data);  
             }
-            else if (tmp_error != 0)
-            {
-                return 1; // Error decoding string data
-            }
-            strcpy(data_buffer[function_buffer_index][i].string, (char*)tmp_string_program_data);
             break;
         case ARBITRARY_BLOCK_PROGRAM_DATA:
-            return 1; // Unsupported data type
+            {
+                uint8_t tmp_string_program_data[256] = {0};
+                uint8_t tmp_error = 1;
+                tmp_error = Decode_arbitrary_block_program_data(ptr, tmp_string_program_data);
+                if (tmp_error == 2)
+                {
+                    return 2; // String not completed before buffer end
+                }
+                else if (tmp_error != 0)
+                {
+                    return 1; // Error decoding string data
+                }
+                strcpy(data_buffer[function_buffer_index][i].string, (char*)tmp_string_program_data);
+            }
             break;
         case EXPRESSION_PROGRAM_DATA:
             return 1; // Unsupported data type
@@ -662,9 +684,86 @@ uint8_t Decode_string_program_data(uint8_t** ptr, uint8_t* output_string)
     return 0;
 }
 
-uint8_t Decode_arbitrary_block_program_data(uint8_t** ptr, uint8_t* output_data, uint32_t* output_length)
+uint8_t Decode_arbitrary_block_program_data(uint8_t** ptr, uint8_t* output_string)
 {
-    // Implementation for decoding arbitrary block data goes here
+    uint8_t index = 0;
+    if(**ptr != '#')
+    {
+        return 1; // Invalid arbitrary block format
+    }
+    (*ptr)++; // Move past the '#'
+    if(!Is_digit(**ptr))
+    {
+        return 1; // Invalid arbitrary block format
+    }
+    if(**ptr == '0')
+    {
+        (*ptr)++; // Move past the '0'
+        while(**ptr != '\n')
+        {
+            if(index < 255) // Prevent buffer overflow
+            {
+                output_string[index++] = **ptr; // Copy character to output string
+            }
+            else
+            {
+                return 1; // Output string buffer overflow
+            }
+            if (Input_FIFO_Move_pointer( &input_buffer, ptr ) != 0) // Move to the next character
+            {
+                printf("Buffer end reached while decoding arbitrary block\n");
+                return 2; // String not completed before buffer end
+            }
+        }
+        if (Input_FIFO_Move_pointer( &input_buffer, ptr ) != 0) // Move past the newline character
+            {
+                printf("Buffer end reached while decoding arbitrary block\n");
+                return 2; // String not completed before buffer end
+            }
+        if(**ptr == '\r')
+        {
+            if (Input_FIFO_Move_pointer( &input_buffer, ptr ) != 0) // Move past the carriage return character
+            {
+                printf("Buffer end reached while decoding arbitrary block\n");
+                return 2; // String not completed before buffer end
+            } 
+        }
+        else
+        {
+            return 1; // Invalid arbitrary block format
+        }
+    }
+    else
+    {
+        uint8_t length_digits = **ptr - '0';
+        (*ptr)++; // Move past the length digit
+        uint32_t data_length = 0;
+        for(uint8_t i = 0; i < length_digits; i++)
+        {
+            if(!Is_digit(**ptr))
+            {
+                return 1; // Invalid arbitrary block format
+            }
+            data_length = data_length *10 + (**ptr - '0');
+            (*ptr)++; // Move past the length digit
+        }
+        for(uint32_t i = 0; i < data_length; i++)
+        {
+            if(index < 255) // Prevent buffer overflow
+            {
+                output_string[index++] = **ptr; // Copy character to output string
+            }
+            else
+            {
+                return 1; // Output string buffer overflow
+            }
+            if (Input_FIFO_Move_pointer( &input_buffer, ptr ) != 0) // Move to the next character
+            {
+                printf("Buffer end reached while decoding arbitrary block\n");
+                return 2; // String not completed before buffer end
+            }
+        }
+    }
     return 0;
 }
 
@@ -854,7 +953,7 @@ uint8_t Input_FIFO_Read( struct Input_FIFO *FIFO, uint8_t *Data )
 
 uint8_t Input_FIFO_Move_pointer( struct Input_FIFO *FIFO, uint8_t **ptr )
 {
-	if(*ptr != FIFO->Write_P)
+	if((*ptr != FIFO->Write_P) && (*ptr != read_input_buffer_until-1))
 	{
 		if(*ptr<(FIFO->Data+FIFO->Lenght-1))
 		{
@@ -922,4 +1021,59 @@ uint8_t Output_FIFO_Read( struct Output_FIFO *FIFO, uint8_t *Data )
 		return 0;
 	}
 	return 1;
+}
+
+void Program_Message_Terminator_FIFO_Init( struct program_message_terminator_FIFO *FIFO)
+{
+    FIFO->Write_P = (uint8_t**)&FIFO->Data[0];
+    FIFO->Read_P = (uint8_t**)&FIFO->Data[0];
+    FIFO->Empty = true;
+    FIFO->Full = false;
+    FIFO->Lenght = 32;
+}
+
+uint8_t Program_Message_Terminator_FIFO_Write( struct program_message_terminator_FIFO *FIFO, uint8_t **Data )
+{
+    if(!FIFO->Full)
+    {
+        *(FIFO->Write_P) = *Data;
+        if(FIFO->Write_P < (uint8_t**)&FIFO->Data[FIFO->Lenght - 1])
+        {
+            FIFO->Write_P++;
+        }
+        else
+        {
+            FIFO->Write_P = (uint8_t**)&FIFO->Data[0];
+        }
+        FIFO->Empty = false;
+        if(FIFO->Write_P == FIFO->Read_P)
+        {
+            FIFO->Full = true;
+        }
+        return 0;
+    }
+    return 1;
+}
+
+uint8_t Program_Message_Terminator_FIFO_Read( struct program_message_terminator_FIFO *FIFO, uint8_t **Data )
+{
+    if(!FIFO->Empty)
+    {
+        *Data = *(FIFO->Read_P);
+        if(FIFO->Read_P < (uint8_t**)&FIFO->Data[FIFO->Lenght - 1])
+        {
+            FIFO->Read_P++;
+        }
+        else
+        {
+            FIFO->Read_P = (uint8_t**)&FIFO->Data[0];
+        }
+        FIFO->Full = false;
+        if(FIFO->Write_P == FIFO->Read_P)
+        {
+            FIFO->Empty = true;
+        }
+        return 0;
+    }
+    return 1;
 }

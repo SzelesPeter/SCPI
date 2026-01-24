@@ -149,7 +149,7 @@ const struct program_mnemonic SYSTem_VERsion_query_mnemonic = {
 const struct program_mnemonic SYSTem_MESsage_mnemonic = {
     .mnemonic_name = "MESsage",
     .parent = &SYSTem_mnemonic,
-    .data_types = {STRING_PROGRAM_DATA, NON},
+    .data_types = {ARBITRARY_BLOCK_PROGRAM_DATA, NON},
     .function = &PET_4882_SYSTem_MESsage,
     .is_end_mnemonic = true
 };

@@ -32,6 +32,15 @@ printf("%f\n", d.f);  // reading i now is undefined behavior
 
 
 //====Struct, Union, and Enum Declarations====
+struct program_message_terminator_FIFO {   // Structure declaration
+  uint8_t** Read_P;
+  uint8_t** Write_P;
+  bool Full;
+  bool Empty;
+  uint32_t Lenght;
+  uint8_t* Data[32];
+}; // End the structure with a semicolon
+
 struct Input_FIFO {   // Structure declaration
   uint8_t* Read_P;
   uint8_t* Write_P;
@@ -52,6 +61,7 @@ struct Output_FIFO {   // Structure declaration
 
 
 //====Global Variable Declarations (with extern)====
+    struct program_message_terminator_FIFO program_message_terminator_buffer;
     struct Input_FIFO input_buffer;
     struct Output_FIFO output_buffer;
     uint8_t New_line_received = 0;
@@ -60,6 +70,7 @@ struct Output_FIFO {   // Structure declaration
     struct program_mnemonic* function_buffer[8];
     uint8_t function_buffer_index = 0;
     union data_union data_buffer[8][5];
+    uint8_t* read_input_buffer_until = NULL;
 
 
 //====Function Declarations (Prototypes)====
@@ -80,7 +91,7 @@ uint8_t Decode_decimal_numeric_program_data(uint8_t** ptr, float* output_value);
 uint8_t Decode_suffix_program_data(uint8_t** ptr, float* output_value);
 uint8_t Decode_nondecmial_numeric_program_data(uint8_t** ptr, int32_t* output_value);
 uint8_t Decode_string_program_data(uint8_t** ptr, uint8_t* output_string);
-uint8_t Decode_arbitrary_block_program_data(uint8_t** ptr, uint8_t* output_data, uint32_t* output_length);
+uint8_t Decode_arbitrary_block_program_data(uint8_t** ptr, uint8_t* output_string);
 uint8_t Decode_expression_program_data(uint8_t** ptr, float* output_value);
 // Utility Functions
 void Make_string_uppercase(uint8_t* string);
@@ -99,6 +110,9 @@ void Step_thru_program_data_separator(uint8_t** ptr);
 bool Is_program_message_unit_separator(uint8_t** ptr);
 void Step_thru_program_message_unit_separator(uint8_t** ptr);
 // FIFO Functions
+void Program_Message_Terminator_FIFO_Init( struct program_message_terminator_FIFO *FIFO);
+uint8_t Program_Message_Terminator_FIFO_Write( struct program_message_terminator_FIFO *FIFO, uint8_t **Data );
+uint8_t Program_Message_Terminator_FIFO_Read( struct program_message_terminator_FIFO *FIFO, uint8_t **Data );
 void Input_FIFO_Init( struct Input_FIFO *FIFO);
 uint8_t Input_FIFO_Write( struct Input_FIFO *FIFO, uint8_t *Data );
 uint8_t Input_FIFO_Read( struct Input_FIFO *FIFO, uint8_t *Data );
