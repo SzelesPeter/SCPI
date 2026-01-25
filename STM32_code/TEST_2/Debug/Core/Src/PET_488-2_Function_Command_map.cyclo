@@ -1,0 +1,4 @@
+../Core/Src/PET_488-2_Function_Command_map.c:7:6:PET_4882_function_init	1
+../Core/Src/PET_488-2_Function_Command_map.c:58:9:PET_4882_IDN_query	1
+../Core/Src/PET_488-2_Function_Command_map.c:67:9:PET_4882_RST_command	1
+../Core/Src/PET_488-2_Function_Command_map.c:81:9:PET_4882_SYSTem_Ld	10
