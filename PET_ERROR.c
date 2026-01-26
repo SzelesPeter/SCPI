@@ -13,7 +13,7 @@ uint8_t Error_Event( struct Error_FIFO *FIFO, uint8_t* description)
 {
     struct Error_Structure new_error;
 
-	printf(description);
+	//printf(description);
 
 
     // Get current timestamp

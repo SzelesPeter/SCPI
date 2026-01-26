@@ -50,126 +50,39 @@ struct program_mnemonic {   // Structure declaration
 // Common Commands
 uint8_t PET_4882_IDN_query(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
 uint8_t PET_4882_RST_command(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
-uint8_t PET_4882_TST_query(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
 
 //Simple Commands
-uint8_t PET_4882_LOL_query(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
 
 //Compound Commands
-uint8_t PET_4882_SYSTem_ERRor_query(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
-uint8_t PET_4882_SYSTem_VERsion_query(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
-uint8_t PET_4882_SYSTem_MESsage(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
-uint8_t PET_4882_SYSTem_NUMber(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
+uint8_t PET_4882_SYSTem_Ld(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
 
+void PET_4882_function_init();
 //====Global Variable Declarations (with extern)====
 
 
 
-const struct program_mnemonic root_mnemonic = {
-    .mnemonic_name = "ROOT",
-    .parent = 0,
-    .data_types = {NON},
-    .function = 0,
-    .is_end_mnemonic = false
-};
+struct program_mnemonic root_mnemonic;
 
 // Common Commands
 
-const struct program_mnemonic IDN_mnemonic = {
-    .mnemonic_name = "IDN?",
-    .parent = &root_mnemonic,
-    .data_types = {NON},
-    .function = &PET_4882_IDN_query,
-    .is_end_mnemonic = true
-};
+ struct program_mnemonic IDN_mnemonic;
+ struct program_mnemonic RST_mnemonic;
 
-const struct program_mnemonic RST_mnemonic = {
-    .mnemonic_name = "RST",
-    .parent = &root_mnemonic,
-    .data_types = {NON},
-    .function = &PET_4882_RST_command,
-    .is_end_mnemonic = true
-};
 
-const struct program_mnemonic TST_mnemonic = {
-    .mnemonic_name = "TST?",
-    .parent = &root_mnemonic,
-    .data_types = {NON},
-    .function = &PET_4882_TST_query,
-    .is_end_mnemonic = true
-};
-
-const struct program_mnemonic *common_command_mnemonics[] = {
-    &IDN_mnemonic,
-    &RST_mnemonic,
-    &TST_mnemonic,
-    0
-};
+ struct program_mnemonic *common_command_mnemonics[10];
 
 //Simple Commands
-const struct program_mnemonic LOL_mnemonic = {
-    .mnemonic_name = "LOL?",
-    .parent = &root_mnemonic,
-    .data_types = {NON},
-    .function = &PET_4882_LOL_query,
-    .is_end_mnemonic = true
-};
 
-const struct program_mnemonic *simple_command_mnemonics[] = {
-    &LOL_mnemonic,
-    0
-};
+
+struct program_mnemonic *simple_command_mnemonics[10];
 
 //Compound Commands
 
-const struct program_mnemonic SYSTem_mnemonic = {
-    .mnemonic_name = "SYSTem",
-    .parent = &root_mnemonic,
-    .data_types = {NON},
-    .function = 0,
-    .is_end_mnemonic = false
-};
+struct program_mnemonic SYSTem_mnemonic;
 
-const struct program_mnemonic SYSTem_ERRor_query_mnemonic = {
-    .mnemonic_name = "ERRor?",
-    .parent = &SYSTem_mnemonic,
-    .data_types = {NON},
-    .function = &PET_4882_SYSTem_ERRor_query,
-    .is_end_mnemonic = true
-};
+struct program_mnemonic SYSTem_Ld_mnemonic;
 
-const struct program_mnemonic SYSTem_VERsion_query_mnemonic = {
-    .mnemonic_name = "VERsion?",
-    .parent = &SYSTem_mnemonic,
-    .data_types = {NON},
-    .function = &PET_4882_SYSTem_VERsion_query,
-    .is_end_mnemonic = true
-};
-
-const struct program_mnemonic SYSTem_MESsage_mnemonic = {
-    .mnemonic_name = "MESsage",
-    .parent = &SYSTem_mnemonic,
-    .data_types = {ARBITRARY_BLOCK_PROGRAM_DATA, NON},
-    .function = &PET_4882_SYSTem_MESsage,
-    .is_end_mnemonic = true
-};
-
-const struct program_mnemonic SYSTem_NUMber_mnemonic = {
-    .mnemonic_name = "NUMber",
-    .parent = &SYSTem_mnemonic,
-    .data_types = {DECIMAL_NUMERIC_PROGRAM_DATA, NON},
-    .function = &PET_4882_SYSTem_NUMber,
-    .is_end_mnemonic = true
-};
-
-const struct program_mnemonic *compound_command_mnemonics[] = {
-    &SYSTem_mnemonic,
-    &SYSTem_ERRor_query_mnemonic,
-    &SYSTem_VERsion_query_mnemonic,
-    &SYSTem_MESsage_mnemonic,
-    &SYSTem_NUMber_mnemonic,
-    0
-};
+struct program_mnemonic *compound_command_mnemonics[10];
 
 //====include Guards (or #pragma once) Prevent the header from being included multiple times.====
 #endif

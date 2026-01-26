@@ -10,8 +10,7 @@
 #include <math.h>
 #include "PET_ERROR.h"
 #include "PET_ERROR.c"
-#include "PET_488-2_Function_Command_map.h"
-#include "PET_488-2_Function_Command_map.c"
+
 
 //====Macro Definitions (#define)====
 //#define input_buffer_size 1024
@@ -21,6 +20,41 @@
 #define Output_buffer_Size 1024
 
 //====Type Definitions (typedef)====
+
+//====Type Definitions (typedef)====
+union data_union { // needs to be above function_ptr_4882 typedef
+    uint32_t i;
+    float f;
+    char string[256];
+};
+
+typedef uint8_t (*function_ptr_4882)(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
+
+typedef enum {
+    NON,
+    CHARACTER_PROGRAM_DATA,
+    DECIMAL_NUMERIC_PROGRAM_DATA,
+    SUFFIX_PROGRAM_DATA,
+    NONDECIMAL_NUMERIC_PROGRAM_DATA,
+    STRING_PROGRAM_DATA,
+    ARBITRARY_BLOCK_PROGRAM_DATA,
+    EXPRESSION_PROGRAM_DATA
+} PROGRAM_DATA;
+
+
+//====Struct, Union, and Enum Declarations====
+
+
+struct program_mnemonic {   // Structure declaration
+  uint8_t mnemonic_name[13];
+  struct program_mnemonic* parent;
+  PROGRAM_DATA data_types[10];
+  function_ptr_4882 function;
+  bool is_end_mnemonic;
+}; // End the structure with a semicolon
+
+
+
 
 /*
 d.i = 10;
@@ -82,7 +116,7 @@ uint8_t Decode_simple_command_program_header(struct program_mnemonic** current_c
 uint8_t Decode_common_command_program_header(struct program_mnemonic** current_command_root, uint8_t** ptr);
 uint8_t Decode_compound_command_program_header(struct program_mnemonic** current_command_root, uint8_t** ptr);
 void Make_string_uppercase(uint8_t* string);
-uint8_t Find_maching_mnemonic(const struct program_mnemonic** mnemonics_list_ptr, struct program_mnemonic** current_command_root, uint8_t* input_mnemonic);
+uint8_t Find_maching_mnemonic(struct program_mnemonic** mnemonics_list_ptr, struct program_mnemonic** current_command_root, uint8_t* input_mnemonic);
 uint8_t Decode_program_data(struct program_mnemonic** current_command_root, uint8_t** ptr);
 uint8_t Decode_character_program_data(uint8_t** ptr, uint8_t* output_string);
 uint8_t Decode_decimal_numeric_program_data(uint8_t** ptr, float* output_value);
@@ -118,6 +152,53 @@ uint8_t Input_FIFO_Move_pointer( struct Input_FIFO *FIFO, uint8_t **ptr );
 void Output_FIFO_Init( struct Output_FIFO *FIFO);
 uint8_t Output_FIFO_Write( struct Output_FIFO *FIFO, uint8_t *Data );
 uint8_t Output_FIFO_Read( struct Output_FIFO *FIFO, uint8_t *Data );
+
+
+
+
+
+
+
+
+
+//====Function Declarations (Prototypes)====
+// Common Commands
+uint8_t PET_4882_IDN_query(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
+uint8_t PET_4882_RST_command(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
+
+//Simple Commands
+
+//Compound Commands
+uint8_t PET_4882_SYSTem_Ld(union data_union *var_1, union data_union *var_2, union data_union *var_3, union data_union *var_4, union data_union *var_5);
+
+void PET_4882_function_init();
+//====Global Variable Declarations (with extern)====
+
+
+
+struct program_mnemonic root_mnemonic;
+
+// Common Commands
+
+ struct program_mnemonic IDN_mnemonic;
+ struct program_mnemonic RST_mnemonic;
+
+
+ struct program_mnemonic *common_command_mnemonics[10];
+
+//Simple Commands
+
+
+struct program_mnemonic *simple_command_mnemonics[10];
+
+//Compound Commands
+
+struct program_mnemonic SYSTem_mnemonic;
+
+struct program_mnemonic SYSTem_Ld_mnemonic;
+
+struct program_mnemonic *compound_command_mnemonics[10];
+
 
 
 
