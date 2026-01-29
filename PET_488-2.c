@@ -8,68 +8,81 @@
 //                  -Save the adress of the New_line_received.   
 //                  -Only decode untill that adress
 
-
-uint8_t main(void) //ONLY FOR TESTING
-{
-    uint8_t test_sting[] = "*IDN?\n";
-    printf("START\n");
-    PET_4882_Init();
-    PET_ERROR_init();
-
-for(int i = 0; test_sting[i] != '\0'; i++)
+#ifdef IS_A_TEST_VERSION
+    uint8_t main(void) //ONLY FOR TESTING
     {
-        PET_4882_Recive_character(test_sting[i]);
-        PET_4882_Process();
+        PET_488_2 PET_488_2_1;
+        uint8_t test_sting[] = "*IDN?\n";
+        printf("START\n");
+        PET_4882_Init(&PET_488_2_1);
+        #ifdef ENABLE_ERROR_HANDLING
+        PET_ERROR_init();
+        #endif
+
+        for(int i = 0; test_sting[i] != '\0'; i++)
+            {
+                PET_4882_Recive_character(&PET_488_2_1, test_sting[i]);
+                PET_4882_Process(&PET_488_2_1);
+            }
+
+        
+        return 0;
     }
+#endif
 
-    
-    return 0;
+void PET_4882_Init(PET_488_2* pet_488_2_instance)
+{
+    Program_Message_Terminator_FIFO_Init(&pet_488_2_instance->program_message_terminator_buffer);
+    Input_FIFO_Init(&pet_488_2_instance->input_buffer);
+    Output_FIFO_Init(&pet_488_2_instance->output_buffer);
+    PET_4882_function_init(pet_488_2_instance);
+    pet_488_2_instance->last_command_root = &root_mnemonic;
 }
 
-void PET_4882_Init(void)
+void PET_4882_Recive_character(PET_488_2* pet_488_2_instance, uint8_t character)
 {
-    Program_Message_Terminator_FIFO_Init(&program_message_terminator_buffer);
-    Input_FIFO_Init(&input_buffer);
-    Output_FIFO_Init(&output_buffer);
-    PET_4882_function_init();
-    last_command_root = &root_mnemonic;
-}
-
-void PET_4882_Recive_character(uint8_t character)
-{
-    if (Input_FIFO_Write(&input_buffer, &character) != 0) {
+    if (Input_FIFO_Write(&pet_488_2_instance->input_buffer, &character) != 0)
+    {
+        #ifdef ENABLE_ERROR_HANDLING
         Error_Event(&Error_FIFO_1, (uint8_t *)"Input buffer overflow");
+        #endif
+        
     }
     if((character == '\n') || (character == '\r'))
     {
-        Program_Message_Terminator_FIFO_Write(&program_message_terminator_buffer, &input_buffer.Write_P);
+        Program_Message_Terminator_FIFO_Write(&pet_488_2_instance->program_message_terminator_buffer, &pet_488_2_instance->input_buffer.Write_P);
     } 
 }
 
-void PET_4882_Send_response(uint8_t* string)
+void PET_4882_Send_response(PET_488_2* pet_488_2_instance, uint8_t* string)
 {
     printf(string);
     while(*string)
     {
-        if (Output_FIFO_Write(&output_buffer, string) != 0) {
+        if (Output_FIFO_Write(&pet_488_2_instance->output_buffer, string) != 0)
+        {
+            #ifdef ENABLE_ERROR_HANDLING
             Error_Event(&Error_FIFO_1, (uint8_t *)"Output buffer overflow");
+            #endif
             return;
         }
         string++;
     }
 }
 
-void PET_4882_Process(void)
+void PET_4882_Process(PET_488_2* pet_488_2_instance)
 {
-    if(0 == program_message_terminator_buffer.Empty)
+    if(0 == pet_488_2_instance->program_message_terminator_buffer.Empty)
     {
-        uint8_t* FIFO_ptr = input_buffer.Read_P;
+        uint8_t* FIFO_ptr = pet_488_2_instance->input_buffer.Read_P;
         bool more_message_units = false;
-        struct program_mnemonic* current_command_root = &root_mnemonic;
-        function_buffer_index = 0;
-        if (Program_Message_Terminator_FIFO_Read(&program_message_terminator_buffer, &read_input_buffer_until) != 0)
+        struct program_mnemonic* current_command_root = pet_488_2_instance->last_command_root;
+        pet_488_2_instance->function_buffer_index = 0;
+        if (Program_Message_Terminator_FIFO_Read(&pet_488_2_instance->program_message_terminator_buffer, &pet_488_2_instance->read_input_buffer_until) != 0)
         {
+            #ifdef ENABLE_ERROR_HANDLING
             Error_Event(&Error_FIFO_1, (uint8_t *)"Program message terminator buffer underflow");
+            #endif
             return;
         }
 
@@ -79,52 +92,64 @@ void PET_4882_Process(void)
             
             if((*FIFO_ptr == '\n') || (*FIFO_ptr == '\r'))
             {
+                #ifdef ENABLE_ERROR_HANDLING
                 Error_Event(&Error_FIFO_1, (uint8_t *)"Empty command received");
-                input_buffer.Read_P = FIFO_ptr + 1;   // Move read pointer past the termination character(s)
+                #endif
+                pet_488_2_instance->input_buffer.Read_P = FIFO_ptr + 1;   // Move read pointer past the termination character(s)
                 return;
             }
             else if ((*FIFO_ptr >= 'A' && *FIFO_ptr <= 'Z') || (*FIFO_ptr >= 'a' && *FIFO_ptr <= 'z'))
             {
-                if(Decode_simple_command_program_header(&current_command_root, &FIFO_ptr) != 0)
+                if(Decode_simple_command_program_header(pet_488_2_instance, &current_command_root, &FIFO_ptr) != 0)
                 {
+                    #ifdef ENABLE_ERROR_HANDLING
                     Error_Event(&Error_FIFO_1, (uint8_t *)"Invalid simple command received");
-                    PET_4882_Init();
+                    #endif
+                    PET_4882_Init(pet_488_2_instance);
                     return;
                 }
             }
             else if((*FIFO_ptr == '*'))
             {
-                if(Decode_common_command_program_header(&current_command_root, &FIFO_ptr) != 0)
+                if(Decode_common_command_program_header(pet_488_2_instance, &current_command_root, &FIFO_ptr) != 0)
                 {
+                    #ifdef ENABLE_ERROR_HANDLING
                     Error_Event(&Error_FIFO_1, (uint8_t *)"Invalid common command received");
-                    PET_4882_Init();
+                    #endif
+                    PET_4882_Init(pet_488_2_instance);
                     return;
                 }
             }
             else if((*FIFO_ptr == ':'))
             {
-                if(Decode_compound_command_program_header(&current_command_root, &FIFO_ptr) != 0)
+                if(Decode_compound_command_program_header(pet_488_2_instance, &current_command_root, &FIFO_ptr) != 0)
                 {
+                    #ifdef ENABLE_ERROR_HANDLING
                     Error_Event(&Error_FIFO_1, (uint8_t *)"Invalid compound command received");
-                    PET_4882_Init();
+                    #endif
+                    PET_4882_Init(pet_488_2_instance);
                     return;
                 }
             }
             else
             {
+                #ifdef ENABLE_ERROR_HANDLING
                 Error_Event(&Error_FIFO_1, (uint8_t *)"Invalid command received");
-                PET_4882_Init();
+                #endif
+                PET_4882_Init(pet_488_2_instance);
                 return;
             }
-            uint8_t tmp_error = Decode_program_data(&current_command_root, &FIFO_ptr);
+            uint8_t tmp_error = Decode_program_data(pet_488_2_instance, &current_command_root, &FIFO_ptr);
             if(tmp_error != 0)
             {
                 if(tmp_error == 2)
                 {
                     return; // Wait for more data
                 }
+                #ifdef ENABLE_ERROR_HANDLING
                 Error_Event(&Error_FIFO_1, (uint8_t *)"Invalid or insufficient data provided");
-                PET_4882_Init();
+                #endif
+                PET_4882_Init(pet_488_2_instance);
                 return;
             }
             if(Is_white_space(&FIFO_ptr))
@@ -134,31 +159,37 @@ void PET_4882_Process(void)
             if(Is_program_message_terminator(&FIFO_ptr))
             {
                 Step_thru_program_message_terminator(&FIFO_ptr);
-                if(add_command_function_to_buffer(&current_command_root))
+                if(add_command_function_to_buffer(pet_488_2_instance, &current_command_root))
                 {
+                    #ifdef ENABLE_ERROR_HANDLING
                     Error_Event(&Error_FIFO_1, (uint8_t *)"Function buffer overflow");
-                    PET_4882_Init();
+                    #endif
+                    PET_4882_Init(pet_488_2_instance);
                     return;
                 }
-                exacute_command_function();
+                exacute_command_function(pet_488_2_instance);
                 more_message_units = false;
-                input_buffer.Read_P = FIFO_ptr;   // Move read pointer past the termination character(s)
+                pet_488_2_instance->input_buffer.Read_P = FIFO_ptr;   // Move read pointer past the termination character(s)
             }
             else if(Is_program_message_unit_separator(&FIFO_ptr))
             {
                 Step_thru_program_message_unit_separator(&FIFO_ptr);
-                if(add_command_function_to_buffer(&current_command_root))
+                if(add_command_function_to_buffer(pet_488_2_instance, &current_command_root))
                 {
+                    #ifdef ENABLE_ERROR_HANDLING
                     Error_Event(&Error_FIFO_1, (uint8_t *)"Function buffer overflow");
-                    PET_4882_Init();
+                    #endif
+                    PET_4882_Init(pet_488_2_instance);
                     return;
                 }
                 more_message_units = true;
             }
             else
             {
+                #ifdef ENABLE_ERROR_HANDLING
                 Error_Event(&Error_FIFO_1, (uint8_t *)"Invalid termination of command");
-                PET_4882_Init();
+                #endif
+                PET_4882_Init(pet_488_2_instance);
             }
             
         }
@@ -166,13 +197,13 @@ void PET_4882_Process(void)
     }
 }
 
-uint8_t add_command_function_to_buffer(struct program_mnemonic** found_command)
+uint8_t add_command_function_to_buffer(PET_488_2* pet_488_2_instance, struct program_mnemonic** found_command)
 {
-    if(function_buffer_index < 8)
+    if(pet_488_2_instance->function_buffer_index < 8)
     {
-        last_command_root = *found_command;
-        function_buffer[function_buffer_index] = *found_command;
-        function_buffer_index++;
+        pet_488_2_instance->last_command_root = *found_command;
+        pet_488_2_instance->function_buffer[pet_488_2_instance->function_buffer_index] = *found_command;
+        pet_488_2_instance->function_buffer_index++;
         return 0;
     }
     else
@@ -181,20 +212,22 @@ uint8_t add_command_function_to_buffer(struct program_mnemonic** found_command)
     }
 }
 
-uint8_t exacute_command_function()
+uint8_t exacute_command_function(PET_488_2* pet_488_2_instance)
 {
-    for(uint8_t i = 0; i < function_buffer_index; i++)
+    for(uint8_t i = 0; i < pet_488_2_instance->function_buffer_index; i++)
     {
-        if(function_buffer[i]->function(&data_buffer[i][0],&data_buffer[i][1],&data_buffer[i][2],&data_buffer[i][3],&data_buffer[i][4]))
+        if(pet_488_2_instance->function_buffer[i]->function(&pet_488_2_instance->data_buffer[i][0],&pet_488_2_instance->data_buffer[i][1],&pet_488_2_instance->data_buffer[i][2],&pet_488_2_instance->data_buffer[i][3],&pet_488_2_instance->data_buffer[i][4]))
         {
+            #ifdef ENABLE_ERROR_HANDLING
             Error_Event(&Error_FIFO_1, (uint8_t *)"Cant process command");
+            #endif
         }
     }
-    function_buffer_index = 0; // Reset function buffer index after command execution
+    pet_488_2_instance->function_buffer_index = 0; // Reset function buffer index after command execution
     return 0;
 }
 
-uint8_t Decode_simple_command_program_header(struct program_mnemonic** current_command_root, uint8_t** ptr)
+uint8_t Decode_simple_command_program_header(PET_488_2* pet_488_2_instance, struct program_mnemonic** current_command_root, uint8_t** ptr)
 {
     uint8_t tmp_mnemonic[13] = {0};
     uint8_t index = 0;
@@ -211,7 +244,7 @@ uint8_t Decode_simple_command_program_header(struct program_mnemonic** current_c
     tmp_mnemonic[index] = '\0'; // Null-terminate the string
 
     // Compare with known common command mnemonics
-    if(Find_maching_mnemonic(simple_command_mnemonics, current_command_root, tmp_mnemonic) != 0)
+    if(Find_maching_mnemonic(pet_488_2_instance->simple_command_mnemonics, current_command_root, tmp_mnemonic) != 0)
     {
         return 1; // No match found
     }
@@ -221,7 +254,7 @@ uint8_t Decode_simple_command_program_header(struct program_mnemonic** current_c
 
 
 
-uint8_t Decode_common_command_program_header(struct program_mnemonic** current_command_root, uint8_t** ptr)
+uint8_t Decode_common_command_program_header(PET_488_2* pet_488_2_instance, struct program_mnemonic** current_command_root, uint8_t** ptr)
 {
     uint8_t tmp_mnemonic[13] = {0};
     uint8_t index = 0;
@@ -240,7 +273,7 @@ uint8_t Decode_common_command_program_header(struct program_mnemonic** current_c
     tmp_mnemonic[index] = '\0'; // Null-terminate the string
 
     // Compare with known common command mnemonics
-    if(Find_maching_mnemonic(common_command_mnemonics, current_command_root, tmp_mnemonic) != 0)
+    if(Find_maching_mnemonic(pet_488_2_instance->common_command_mnemonics, current_command_root, tmp_mnemonic) != 0)
     {
         return 1; // No match found
     }
@@ -248,13 +281,13 @@ uint8_t Decode_common_command_program_header(struct program_mnemonic** current_c
     return 0;
 }
 
-uint8_t Decode_compound_command_program_header(struct program_mnemonic** current_command_root, uint8_t** ptr)
+uint8_t Decode_compound_command_program_header(PET_488_2* pet_488_2_instance, struct program_mnemonic** current_command_root, uint8_t** ptr)
 {
     uint8_t tmp_mnemonic[13] = {0};
     uint8_t index = 0;
     uint8_t* saved_ptr = *ptr;
 
-    *current_command_root = last_command_root->parent; // Move up one level in the command hierarchy
+    *current_command_root = (*current_command_root)->parent; // Move up one level in the command hierarchy
 
 
     while(Is_program_mnemonic_separator(ptr)) 
@@ -272,7 +305,7 @@ uint8_t Decode_compound_command_program_header(struct program_mnemonic** current
         tmp_mnemonic[index] = '\0'; // Null-terminate the string
 
         // Compare with known common command mnemonics
-        if(Find_maching_mnemonic(compound_command_mnemonics, current_command_root, tmp_mnemonic) != 0)
+        if(Find_maching_mnemonic(pet_488_2_instance->compound_command_mnemonics, current_command_root, tmp_mnemonic) != 0)
         {
             // No match found, reset pointer and try again
             *ptr = saved_ptr;
@@ -294,7 +327,7 @@ uint8_t Decode_compound_command_program_header(struct program_mnemonic** current
                 tmp_mnemonic[index] = '\0'; // Null-terminate the string
 
                 // Compare with known common command mnemonics
-                if(Find_maching_mnemonic(compound_command_mnemonics, current_command_root, tmp_mnemonic) != 0)
+                if(Find_maching_mnemonic(pet_488_2_instance->compound_command_mnemonics, current_command_root, tmp_mnemonic) != 0)
                 {
                     return 1; // No match found
                 }
@@ -355,7 +388,7 @@ uint8_t Find_maching_mnemonic(struct program_mnemonic** mnemonics_list_ptr, stru
     return 1; // No match found
 }
 
-uint8_t Decode_program_data(struct program_mnemonic** current_command_root, uint8_t** ptr)
+uint8_t Decode_program_data(PET_488_2* pet_488_2_instance, struct program_mnemonic** current_command_root, uint8_t** ptr)
 {
     Step_thru_program_header_separator(ptr);
 
@@ -395,7 +428,7 @@ uint8_t Decode_program_data(struct program_mnemonic** current_command_root, uint
             {
                 return 1; // Error decoding character data
             }
-            strcpy(data_buffer[function_buffer_index][i].string, (char*)tmp_character_program_data);
+            strcpy(pet_488_2_instance->data_buffer[pet_488_2_instance->function_buffer_index][i].string, (char*)tmp_character_program_data);
             break;
         case DECIMAL_NUMERIC_PROGRAM_DATA:
             float tmp_decimal_numeric_program_data = 0;
@@ -403,7 +436,7 @@ uint8_t Decode_program_data(struct program_mnemonic** current_command_root, uint
             {
                 return 1; // Error decoding decimal numeric data
             }
-            data_buffer[function_buffer_index][i].f = tmp_decimal_numeric_program_data;
+            pet_488_2_instance->data_buffer[pet_488_2_instance->function_buffer_index][i].f = tmp_decimal_numeric_program_data;
             break;
         case SUFFIX_PROGRAM_DATA:
             return 1; // Unsupported data type
@@ -415,7 +448,7 @@ uint8_t Decode_program_data(struct program_mnemonic** current_command_root, uint
             {
                 uint8_t tmp_string_program_data[256] = {0};
                 uint8_t tmp_error = 1;
-                tmp_error = Decode_string_program_data(ptr, tmp_string_program_data);
+                tmp_error = Decode_string_program_data(pet_488_2_instance, ptr, tmp_string_program_data);
                 if (tmp_error == 2)
                 {
                     return 2; // String not completed before buffer end
@@ -424,14 +457,14 @@ uint8_t Decode_program_data(struct program_mnemonic** current_command_root, uint
                 {
                     return 1; // Error decoding string data
                 }
-                strcpy(data_buffer[function_buffer_index][i].string, (char*)tmp_string_program_data);  
+                strcpy(pet_488_2_instance->data_buffer[pet_488_2_instance->function_buffer_index][i].string, (char*)tmp_string_program_data);  
             }
             break;
         case ARBITRARY_BLOCK_PROGRAM_DATA:
             {
                 uint8_t tmp_string_program_data[256] = {0};
                 uint8_t tmp_error = 1;
-                tmp_error = Decode_arbitrary_block_program_data(ptr, tmp_string_program_data);
+                tmp_error = Decode_arbitrary_block_program_data(pet_488_2_instance, ptr, tmp_string_program_data);
                 if (tmp_error == 2)
                 {
                     return 2; // String not completed before buffer end
@@ -440,7 +473,7 @@ uint8_t Decode_program_data(struct program_mnemonic** current_command_root, uint
                 {
                     return 1; // Error decoding string data
                 }
-                strcpy(data_buffer[function_buffer_index][i].string, (char*)tmp_string_program_data);
+                strcpy(pet_488_2_instance->data_buffer[pet_488_2_instance->function_buffer_index][i].string, (char*)tmp_string_program_data);
             }
             break;
         case EXPRESSION_PROGRAM_DATA:
@@ -582,7 +615,7 @@ uint8_t Decode_nondecmial_numeric_program_data(uint8_t** ptr, int32_t* output_va
     return 0;
 }
 
-uint8_t Decode_string_program_data(uint8_t** ptr, uint8_t* output_string)
+uint8_t Decode_string_program_data(PET_488_2* pet_488_2_instance, uint8_t** ptr, uint8_t* output_string)
 {
     uint8_t New_line_received_during_string = 0;
     if(**ptr == '\"') // Check for opening double quote
@@ -622,9 +655,11 @@ uint8_t Decode_string_program_data(uint8_t** ptr, uint8_t* output_string)
                 {
                     return 1; // Output string buffer overflow
                 }
-                if (Input_FIFO_Move_pointer( &input_buffer, ptr ) != 0) // Move to the next character
+                if (Input_FIFO_Move_pointer(pet_488_2_instance, &pet_488_2_instance->input_buffer, ptr ) != 0) // Move to the next character
                 {
-                    //printf("Buffer end reached while decoding string\n");
+                    #ifdef IS_A_TEST_VERSION
+                    printf("Buffer end reached while decoding string\n");
+                    #endif
                     return 2; // String not completed before buffer end
                 }
             }
@@ -663,9 +698,11 @@ uint8_t Decode_string_program_data(uint8_t** ptr, uint8_t* output_string)
                 {
                     return 1; // Output string buffer overflow
                 }
-                if (Input_FIFO_Move_pointer( &input_buffer, ptr ) != 0) // Move to the next character
+                if (Input_FIFO_Move_pointer(pet_488_2_instance, &pet_488_2_instance->input_buffer, ptr ) != 0) // Move to the next character
                 {
-                    //printf("Buffer end reached while decoding string\n");
+                    #ifdef IS_A_TEST_VERSION
+                    printf("Buffer end reached while decoding string\n");
+                    #endif
                     return 2; // String not completed before buffer end
                 }
             }
@@ -679,7 +716,7 @@ uint8_t Decode_string_program_data(uint8_t** ptr, uint8_t* output_string)
     return 0;
 }
 
-uint8_t Decode_arbitrary_block_program_data(uint8_t** ptr, uint8_t* output_string)
+uint8_t Decode_arbitrary_block_program_data(PET_488_2* pet_488_2_instance, uint8_t** ptr, uint8_t* output_string)
 {
     uint8_t index = 0;
     if(**ptr != '#')
@@ -704,22 +741,28 @@ uint8_t Decode_arbitrary_block_program_data(uint8_t** ptr, uint8_t* output_strin
             {
                 return 1; // Output string buffer overflow
             }
-            if (Input_FIFO_Move_pointer( &input_buffer, ptr ) != 0) // Move to the next character
+            if (Input_FIFO_Move_pointer(pet_488_2_instance, &pet_488_2_instance->input_buffer, ptr ) != 0) // Move to the next character
             {
-                //printf("Buffer end reached while decoding arbitrary block\n");
+                #ifdef IS_A_TEST_VERSION
+                printf("Buffer end reached while decoding arbitrary block\n");
+                #endif
                 return 2; // String not completed before buffer end
             }
         }
-        if (Input_FIFO_Move_pointer( &input_buffer, ptr ) != 0) // Move past the newline character
+        if (Input_FIFO_Move_pointer(pet_488_2_instance, &pet_488_2_instance->input_buffer, ptr ) != 0) // Move past the newline character
             {
-                //printf("Buffer end reached while decoding arbitrary block\n");
+                #ifdef IS_A_TEST_VERSION
+                printf("Buffer end reached while decoding arbitrary block\n");
+                #endif
                 return 2; // String not completed before buffer end
             }
         if(**ptr == '\r')
         {
-            if (Input_FIFO_Move_pointer( &input_buffer, ptr ) != 0) // Move past the carriage return character
+            if (Input_FIFO_Move_pointer(pet_488_2_instance, &pet_488_2_instance->input_buffer, ptr ) != 0) // Move past the carriage return character
             {
-                //printf("Buffer end reached while decoding arbitrary block\n");
+                #ifdef IS_A_TEST_VERSION
+                printf("Buffer end reached while decoding arbitrary block\n");
+                #endif
                 return 2; // String not completed before buffer end
             } 
         }
@@ -752,9 +795,11 @@ uint8_t Decode_arbitrary_block_program_data(uint8_t** ptr, uint8_t* output_strin
             {
                 return 1; // Output string buffer overflow
             }
-            if (Input_FIFO_Move_pointer( &input_buffer, ptr ) != 0) // Move to the next character
+            if (Input_FIFO_Move_pointer(pet_488_2_instance, &pet_488_2_instance->input_buffer, ptr ) != 0) // Move to the next character
             {
-                //printf("Buffer end reached while decoding arbitrary block\n");
+                #ifdef IS_A_TEST_VERSION
+                printf("Buffer end reached while decoding arbitrary block\n");
+                #endif
                 return 2; // String not completed before buffer end
             }
         }
@@ -946,9 +991,9 @@ uint8_t Input_FIFO_Read( struct Input_FIFO *FIFO, uint8_t *Data )
 	return 1;
 }
 
-uint8_t Input_FIFO_Move_pointer( struct Input_FIFO *FIFO, uint8_t **ptr )
+uint8_t Input_FIFO_Move_pointer(PET_488_2* pet_488_2_instance, struct Input_FIFO *FIFO, uint8_t **ptr )
 {
-	if((*ptr != FIFO->Write_P) && (*ptr != read_input_buffer_until-1))
+	if((*ptr != FIFO->Write_P) && (*ptr != pet_488_2_instance->read_input_buffer_until-1))
 	{
 		if(*ptr<(FIFO->Data+FIFO->Lenght-1))
 		{
@@ -1077,7 +1122,7 @@ uint8_t Program_Message_Terminator_FIFO_Read( struct program_message_terminator_
 
 //===========================================================================================================
 
-void PET_4882_function_init()
+void PET_4882_function_init(PET_488_2* pet_488_2_instance)
 {
 	strcpy(root_mnemonic.mnemonic_name, "ROOT");
 	root_mnemonic.parent = 0;
@@ -1111,15 +1156,15 @@ void PET_4882_function_init()
 	SYSTem_Ld_mnemonic.function = &PET_4882_SYSTem_Ld;
 	SYSTem_Ld_mnemonic.is_end_mnemonic = true;
 
-	common_command_mnemonics[0] = &IDN_mnemonic;
-	common_command_mnemonics[1] = &RST_mnemonic;
-	common_command_mnemonics[2] = 0;
+	pet_488_2_instance->common_command_mnemonics[0] = &IDN_mnemonic;
+	pet_488_2_instance->common_command_mnemonics[1] = &RST_mnemonic;
+	pet_488_2_instance->common_command_mnemonics[2] = 0;
 
-	simple_command_mnemonics[0] = 0;
+	pet_488_2_instance->simple_command_mnemonics[0] = 0;
 
-	compound_command_mnemonics[0] = &SYSTem_mnemonic;
-	compound_command_mnemonics[1] = &SYSTem_Ld_mnemonic;
-	compound_command_mnemonics[2] = 0;
+	pet_488_2_instance->compound_command_mnemonics[0] = &SYSTem_mnemonic;
+	pet_488_2_instance->compound_command_mnemonics[1] = &SYSTem_Ld_mnemonic;
+	pet_488_2_instance->compound_command_mnemonics[2] = 0;
 }
 
 

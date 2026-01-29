@@ -2,6 +2,11 @@
 #ifndef PET_ERROR_H_
 #define PET_ERROR_H_ 
 
+//Compile options
+#define IS_A_TEST_VERSION
+
+
+
 //====Other Header Includes====
 #include <stdio.h>
 #include <stdint.h>

@@ -1,0 +1,9 @@
+# ninja log v5
+6	1038	0	CMakeFiles/gpio_example	a6d216800998bd46
+6	1038	0	xgpio_exlist.yaml	a6d216800998bd46
+6	1038	0	C:/Users/win10/Documents/C/SCPI/FPGA_RISC_V_Test/RISC_V_Code/workspace/platform/microblaze_riscv_0/standalone_microblaze_riscv_0/bsp/libsrc/build_configs/exmetadata/CMakeFiles/gpio_example	a6d216800998bd46
+6	1038	0	C:/Users/win10/Documents/C/SCPI/FPGA_RISC_V_Test/RISC_V_Code/workspace/platform/microblaze_riscv_0/standalone_microblaze_riscv_0/bsp/libsrc/build_configs/exmetadata/xgpio_exlist.yaml	a6d216800998bd46
+19	1169	0	CMakeFiles/uartlite_example	577fd193a8092d83
+19	1169	0	xuartlite_exlist.yaml	577fd193a8092d83
+19	1169	0	C:/Users/win10/Documents/C/SCPI/FPGA_RISC_V_Test/RISC_V_Code/workspace/platform/microblaze_riscv_0/standalone_microblaze_riscv_0/bsp/libsrc/build_configs/exmetadata/CMakeFiles/uartlite_example	577fd193a8092d83
+19	1169	0	C:/Users/win10/Documents/C/SCPI/FPGA_RISC_V_Test/RISC_V_Code/workspace/platform/microblaze_riscv_0/standalone_microblaze_riscv_0/bsp/libsrc/build_configs/exmetadata/xuartlite_exlist.yaml	577fd193a8092d83

@@ -13,8 +13,9 @@ uint8_t Error_Event( struct Error_FIFO *FIFO, uint8_t* description)
 {
     struct Error_Structure new_error;
 
-	//printf(description);
-
+	#ifdef IS_A_TEST_VERSION
+		printf(description);
+	#endif
 
     // Get current timestamp
     snprintf((char*)new_error.Timestamp, sizeof(new_error.Timestamp), "2024-01-01 12:00:00"); // Placeholder timestamp
