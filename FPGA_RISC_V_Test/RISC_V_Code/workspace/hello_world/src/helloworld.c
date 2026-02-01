@@ -30,7 +30,8 @@
 #include "xparameters.h"
 
 #include "PET.h"
-XGpio Gpio;
+
+extern XGpio Gpio;
 
 int main()
 {
@@ -42,6 +43,9 @@ int main()
     
     XGpio_Initialize(&Gpio, XPAR_AXI_GPIO_0_BASEADDR);
     XGpio_SetDataDirection(&Gpio, 1, 0xFFFFFFFD);
+
+    XGpio_DiscreteSet(&Gpio, 1, 0x1);
+    XGpio_DiscreteClear(&Gpio, 1, 0x2);
 
     print("Hello World\n\r");
     print("Successfully ran Hello World application");

@@ -3,3 +3,23 @@
     <Process Command="vivado.bat" Owner="win10" Host="DESKTOP-I3BS7O3" Pid="1952" HostCore="4" HostMemory="016995454976">
     </Process>
 </ProcessHandle>
+<?xml version="1.0"?>
+<ProcessHandle Version="1" Minor="0">
+    <Process Command="vivado.bat" Owner="win10" Host="DESKTOP-I3BS7O3" Pid="4468" HostCore="4" HostMemory="016995454976">
+    </Process>
+</ProcessHandle>
+<?xml version="1.0"?>
+<ProcessHandle Version="1" Minor="0">
+    <Process Command="vivado.bat" Owner="win10" Host="DESKTOP-I3BS7O3" Pid="1496" HostCore="4" HostMemory="016995454976">
+    </Process>
+</ProcessHandle>
+<?xml version="1.0"?>
+<ProcessHandle Version="1" Minor="0">
+    <Process Command="vivado.bat" Owner="win10" Host="DESKTOP-I3BS7O3" Pid="3756" HostCore="4" HostMemory="016995454976">
+    </Process>
+</ProcessHandle>
+<?xml version="1.0"?>
+<ProcessHandle Version="1" Minor="0">
+    <Process Command="vivado.bat" Owner="win10" Host="DESKTOP-I3BS7O3" Pid="16296" HostCore="4" HostMemory="016995454976">
+    </Process>
+</ProcessHandle>

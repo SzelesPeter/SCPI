@@ -19,10 +19,11 @@ print(command)
 s = ser.readline(100)       # read up to one hundred bytes
 print(s)
 command = ":SYSTEM:LD 1,0\n"
-print(command)
 ser.write(command.encode(encoding="ascii",errors="ignore"))     # write a string
+s = ser.readline(100)       # read up to one hundred bytes
+print(s)
 time.sleep(0.2)
-"""
+
 while True:
     time.sleep(0.2)
     command = ":SYSTEM:LD 1,1\n"
@@ -49,4 +50,4 @@ while True:
     print(command)
     ser.write(command.encode(encoding="ascii",errors="ignore"))     # write a string
     time.sleep(0.2)
-"""
+

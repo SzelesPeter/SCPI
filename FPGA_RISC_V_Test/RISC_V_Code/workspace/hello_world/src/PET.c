@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <xgpio.h>
 
+XGpio Gpio;
 
 //TODO:
 //  \r not handled correctly as message terminator
@@ -1204,40 +1205,42 @@ uint8_t PET_4882_SYSTem_Ld(union data_union *var_1, union data_union *var_2, uni
     //sprintf((char*)message, "ET_4882_SYSTem_NUMber_query %f\n", var_1->f);
     //printf("%s", message);
     extern XGpio Gpio;
-	if(var_1->i == '1')
+	if(var_1->string[0] == '1')
 	{
         
-		if(var_2->i == '0')
+		if(var_2->string[0] == '0')
 		{
+            uint8_t response[] = "GPIO_reset\n";
+            printf("%s", response);
 			//HAL_GPIO_WritePin(LD1_GPIO_Port, LD1_Pin, 0);
             XGpio_DiscreteSet(&Gpio, 1, 0x1);
 		}
-		if(var_2->i == '1')
+		if(var_2->string[0] == '1')
 		{
 			//HAL_GPIO_WritePin(LD1_GPIO_Port, LD1_Pin, 1);
             XGpio_DiscreteClear(&Gpio, 1, 0x1);
 		}
 	}
-	if(var_1->i == '2')
+	if(var_1->string[0] == '2')
 	{
-		if(var_2->i == '0')
+		if(var_2->string[0] == '0')
 		{
 			//HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, 0);
             XGpio_DiscreteSet(&Gpio, 1, 0x2);
 		}
-		if(var_2->i == '1')
+		if(var_2->string[0] == '1')
 		{
 			//HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, 1);
             XGpio_DiscreteClear(&Gpio, 1, 0x2);
 		}
 	}
-	if(var_1->i == '3')
+	if(var_1->string[0] == '3')
 	{
-		if(var_2->i == '0')
+		if(var_2->string[0] == '0')
 		{
 			//HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 0);
 		}
-		if(var_2->i == '1')
+		if(var_2->string[0] == '1')
 		{
 			//HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 1);
 		}
