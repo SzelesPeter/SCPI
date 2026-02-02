@@ -423,20 +423,24 @@ uint8_t Decode_program_data(PET_488_2* pet_488_2_instance, struct program_mnemon
         case NON:
             break;
         case CHARACTER_PROGRAM_DATA:
-            uint8_t tmp_character_program_data[13] = {0};
-            if (Decode_character_program_data(ptr, tmp_character_program_data) != 0)
             {
-                return 1; // Error decoding character data
+                uint8_t tmp_character_program_data[13] = {0};
+                if (Decode_character_program_data(ptr, tmp_character_program_data) != 0)
+                {
+                    return 1; // Error decoding character data
+                }
+                strcpy(pet_488_2_instance->data_buffer[pet_488_2_instance->function_buffer_index][i].string, (char*)tmp_character_program_data);
             }
-            strcpy(pet_488_2_instance->data_buffer[pet_488_2_instance->function_buffer_index][i].string, (char*)tmp_character_program_data);
             break;
         case DECIMAL_NUMERIC_PROGRAM_DATA:
-            float tmp_decimal_numeric_program_data = 0;
-            if (Decode_decimal_numeric_program_data(ptr, (float*)&tmp_decimal_numeric_program_data) != 0)
             {
-                return 1; // Error decoding decimal numeric data
+                float tmp_decimal_numeric_program_data = 0;
+                if (Decode_decimal_numeric_program_data(ptr, (float*)&tmp_decimal_numeric_program_data) != 0)
+                {
+                    return 1; // Error decoding decimal numeric data
+                }
+                pet_488_2_instance->data_buffer[pet_488_2_instance->function_buffer_index][i].f = tmp_decimal_numeric_program_data;
             }
-            pet_488_2_instance->data_buffer[pet_488_2_instance->function_buffer_index][i].f = tmp_decimal_numeric_program_data;
             break;
         case SUFFIX_PROGRAM_DATA:
             return 1; // Unsupported data type
